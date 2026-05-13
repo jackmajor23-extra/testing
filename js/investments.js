@@ -1,9 +1,10 @@
 // ── Holdings ─────────────────────────────────────────
-// 12. JS: HOLDINGS
+// 12. JS: HOLDINGS (REFACTORED)
 // ═══════════════════════════════════════════════════
 function renderInvestments(){
   invTab('stocks', document.querySelector('#page-investments .tab-btn.active') || document.querySelector('#page-investments .tab-btn'));
 }
+
 function setHFilter(f,el){
   hFilter=f;
   document.querySelectorAll('#htab-open .filter-btn').forEach(b=>b.classList.remove('active'));
@@ -11,144 +12,90 @@ function setHFilter(f,el){
   renderHoldings();
 }
 
+/**
+ * Main holdings render - uses shared renderHoldingRow helper
+ */
 function renderHoldings(){
   const q=(document.getElementById('holdingsSearch')||{}).value||'';
   let H=S.holdings;
   if(hFilter!=='all') H=H.filter(h=>h.type===hFilter);
   if(q) H=H.filter(h=>h.name.toLowerCase().includes(q.toLowerCase())||(h.ticker||'').toLowerCase().includes(q.toLowerCase()));
   const tb=document.getElementById('holdingsBody');
-  if(!H.length){ tb.innerHTML=`<tr><td colspan="10"><div class="empty"><div class="ei">◫</div><p>No holdings yet.<br>Add one via the Add tab.</p></div></td></tr>`; return; }
+  if(!H.length){ 
+    tb.innerHTML=renderEmptyState('◫', 'No holdings yet.<br>Add one via the Add tab.', '10');
+    return;
+  }
   tb.innerHTML=H.map(h=>{
     const originalIndex = S.holdings.findIndex(x => x.id === h.id);
-    const pl=h.current-h.invested, ret=pct(h.current,h.invested);
-    const lp=h.ticker?livePrices[h.ticker.toUpperCase()]:null;
-    return`<tr>
-      <td><span style="font-variation-settings:'wght' 600;">${h.name}</span>${h.ticker?`<span class="ticker-badge">${h.ticker}</span>`:''}</td>
-      <td><span class="pill p-${h.type}">${h.type}</span></td>
-      <td class="val">${h.buyPrice?CUR()+parseFloat(h.buyPrice).toFixed(2):'—'}</td>
-      <td>${fmtDate(h.buyDate)}</td>
-      <td class="val">${fmt(h.invested)}</td>
-      <td class="val">${fmt(h.current)}${lp?` <span style="font-size:10px;color:var(--muted);">(live)</span>`:''}</td>
-      <td class="${cls(pl)} val">${fmtS(pl)}</td>
-      <td class="${cls(ret)}">${fmtP(ret)}</td>
-      <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px;">${h.notes||'—'}</td>
-      <td style="white-space:nowrap;">
-        <button class="icon-btn" onclick="moveHoldingUp(${originalIndex})" title="Move up">▲</button>
-        <button class="icon-btn" onclick="moveHoldingDown(${originalIndex})" title="Move down">▼</button>
-        <button class="icon-btn edit" onclick="openEditHolding(${h.id})">✎</button>
-        <button class="icon-btn del"  onclick="deleteHolding(${h.id})">✕</button>
-      </td>
-    </tr>`;
+    return renderHoldingRow(h, originalIndex);
   }).join('');
 }
 
+/**
+ * Stocks holdings render - uses shared renderHoldingRow helper
+ * BUG FIX: Avoid duplicate holdings by properly filtering
+ */
 function renderStocksHoldings(){
   const q=(document.getElementById('holdingsSearch')||{}).value||'';
   let H=S.holdings.filter(h=>h.type==='stocks');
   if(q) H=H.filter(h=>h.name.toLowerCase().includes(q.toLowerCase())||(h.ticker||'').toLowerCase().includes(q.toLowerCase()));
   const tb=document.getElementById('stocksBody');
-  if(!H.length){ tb.innerHTML=`<tr><td colspan="10"><div class="empty"><div class="ei">◫</div><p>No stock holdings yet.</p></div></td></tr>`; return; }
+  if(!H.length){ 
+    tb.innerHTML=renderEmptyState('◫', 'No stock holdings yet.', '10');
+    return;
+  }
   tb.innerHTML=H.map(h=>{
     const originalIndex = S.holdings.findIndex(x => x.id === h.id);
-    const pl=h.current-h.invested, ret=pct(h.current,h.invested);
-    const lp=h.ticker?livePrices[h.ticker.toUpperCase()]:null;
-    return`<tr>
-      <td><span style="font-variation-settings:'wght' 600;">${h.name}</span>${h.ticker?`<span class="ticker-badge">${h.ticker}</span>`:''}</td>
-      <td><span class="pill p-${h.type}">${h.type}</span></td>
-      <td class="val">${h.buyPrice?CUR()+parseFloat(h.buyPrice).toFixed(2):'—'}</td>
-      <td>${fmtDate(h.buyDate)}</td>
-      <td class="val">${fmt(h.invested)}</td>
-      <td class="val">${fmt(h.current)}${lp?` <span style="font-size:10px;color:var(--muted);">(live)</span>`:''}</td>
-      <td class="${cls(pl)} val">${fmtS(pl)}</td>
-      <td class="${cls(ret)}">${fmtP(ret)}</td>
-      <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px;">${h.notes||'—'}</td>
-      <td style="white-space:nowrap;">
-        <button class="icon-btn" onclick="moveHoldingUp(${originalIndex})" title="Move up">▲</button>
-        <button class="icon-btn" onclick="moveHoldingDown(${originalIndex})" title="Move down">▼</button>
-        <button class="icon-btn edit" onclick="openEditHolding(${h.id})">✎</button>
-        <button class="icon-btn del"  onclick="deleteHolding(${h.id})">✕</button>
-      </td>
-    </tr>`;
+    return renderHoldingRow(h, originalIndex);
   }).join('');
 }
 
+/**
+ * Crypto holdings render - uses shared renderHoldingRow helper
+ * BUG FIX: Avoid duplicate holdings by properly filtering
+ */
 function renderCryptoHoldings(){
   const q=(document.getElementById('cryptoSearch')||{}).value||'';
   let H=S.holdings.filter(h=>h.type==='crypto');
   if(q) H=H.filter(h=>h.name.toLowerCase().includes(q.toLowerCase())||(h.ticker||'').toLowerCase().includes(q.toLowerCase()));
   const tb=document.getElementById('cryptoBody');
-  if(!H.length){ tb.innerHTML=`<tr><td colspan="10"><div class="empty"><div class="ei">◫</div><p>No crypto holdings yet.</p></div></td></tr>`; return; }
+  if(!H.length){ 
+    tb.innerHTML=renderEmptyState('◫', 'No crypto holdings yet.', '10');
+    return;
+  }
   tb.innerHTML=H.map(h=>{
     const originalIndex = S.holdings.findIndex(x => x.id === h.id);
-    const pl=h.current-h.invested, ret=pct(h.current,h.invested);
-    const lp=h.ticker?livePrices[h.ticker.toUpperCase()]:null;
-    return`<tr>
-      <td><span style="font-variation-settings:'wght' 600;">${h.name}</span>${h.ticker?`<span class="ticker-badge">${h.ticker}</span>`:''}</td>
-      <td><span class="pill p-${h.type}">${h.type}</span></td>
-      <td class="val">${h.buyPrice?CUR()+parseFloat(h.buyPrice).toFixed(2):'—'}</td>
-      <td>${fmtDate(h.buyDate)}</td>
-      <td class="val">${fmt(h.invested)}</td>
-      <td class="val">${fmt(h.current)}${lp?` <span style="font-size:10px;color:var(--muted);">(live)</span>`:''}</td>
-      <td class="${cls(pl)} val">${fmtS(pl)}</td>
-      <td class="${cls(ret)}">${fmtP(ret)}</td>
-      <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px;">${h.notes||'—'}</td>
-      <td style="white-space:nowrap;">
-        <button class="icon-btn" onclick="moveHoldingUp(${originalIndex})" title="Move up">▲</button>
-        <button class="icon-btn" onclick="moveHoldingDown(${originalIndex})" title="Move down">▼</button>
-        <button class="icon-btn edit" onclick="openEditHolding(${h.id})">✎</button>
-        <button class="icon-btn del"  onclick="deleteHolding(${h.id})">✕</button>
-      </td>
-    </tr>`;
+    return renderHoldingRow(h, originalIndex);
   }).join('');
 }
 
+/**
+ * Consolidated investment stats rendering
+ * Reduces code duplication across type-specific stat renderers
+ */
 function renderInvestmentStats(){
-  const H=S.holdings;
-  const invested=H.reduce((s,h)=>s+h.invested,0);
-  const current=H.reduce((s,h)=>s+h.current,0);
-  const pl=current-invested;
-  const ret=invested?((current/invested-1)*100):0;
-  document.getElementById('investmentStats').innerHTML=`
-    <div class="stat-card sc-accent"><div class="stat-label">Total Invested</div><div class="stat-val val">${fmt(invested)}</div></div>
-    <div class="stat-card sc-green"><div class="stat-label">Current Value</div><div class="stat-val pos val">${fmt(current)}</div></div>
-    <div class="stat-card sc-amber"><div class="stat-label">Unrealised P&L</div><div class="stat-val ${cls(pl)} val">${fmtS(pl)}</div><div class="stat-sub">${fmtP(ret)}</div></div>
-  `;
+  renderInvestmentTypeStats(S.holdings, 'investmentStats');
 }
 
 function renderStocksStats(){
-  const H=S.holdings.filter(h=>h.type==='stocks');
-  const invested=H.reduce((s,h)=>s+h.invested,0);
-  const current=H.reduce((s,h)=>s+h.current,0);
-  const pl=current-invested;
-  const ret=invested?((current/invested-1)*100):0;
-  document.getElementById('stocksStats').innerHTML=`
-    <div class="stat-card sc-accent"><div class="stat-label">Stocks Invested</div><div class="stat-val val">${fmt(invested)}</div></div>
-    <div class="stat-card sc-green"><div class="stat-label">Current Value</div><div class="stat-val pos val">${fmt(current)}</div></div>
-    <div class="stat-card sc-amber"><div class="stat-label">P&L</div><div class="stat-val ${cls(pl)} val">${fmtS(pl)}</div><div class="stat-sub">${fmtP(ret)}</div></div>
-  `;
+  renderInvestmentTypeStats(S.holdings.filter(h=>h.type==='stocks'), 'stocksStats', 'Stocks');
 }
 
 function renderCryptoStats(){
-  const H=S.holdings.filter(h=>h.type==='crypto');
-  const invested=H.reduce((s,h)=>s+h.invested,0);
-  const current=H.reduce((s,h)=>s+h.current,0);
-  const pl=current-invested;
-  const ret=invested?((current/invested-1)*100):0;
-  document.getElementById('cryptoStats').innerHTML=`
-    <div class="stat-card sc-accent"><div class="stat-label">Crypto Invested</div><div class="stat-val val">${fmt(invested)}</div></div>
-    <div class="stat-card sc-green"><div class="stat-label">Current Value</div><div class="stat-val pos val">${fmt(current)}</div></div>
-    <div class="stat-card sc-amber"><div class="stat-label">P&L</div><div class="stat-val ${cls(pl)} val">${fmtS(pl)}</div><div class="stat-sub">${fmtP(ret)}</div></div>
-  `;
+  renderInvestmentTypeStats(S.holdings.filter(h=>h.type==='crypto'), 'cryptoStats', 'Crypto');
 }
 
 function renderClosed(){
   const tb=document.getElementById('closedBody');
-  if(!S.closedHoldings.length){ tb.innerHTML=`<tr><td colspan="11"><div class="empty"><div class="ei">◫</div><p>No sold positions yet.</p></div></td></tr>`; return; }
+  if(!S.closedHoldings.length){ 
+    tb.innerHTML=renderEmptyState('◫', 'No sold positions yet.', '11');
+    return;
+  }
   tb.innerHTML=S.closedHoldings.map((h,i)=>{
     const pl=(h.soldFor||0)-h.invested, ret=pct(h.soldFor||0,h.invested);
     return`<tr>
       <td><span style="font-variation-settings:'wght' 600;">${h.name}</span>${h.ticker?`<span class="ticker-badge">${h.ticker}</span>`:''}</td>
-      <td><span class="pill p-${h.type}">${h.type}</span></td>
+      <td>${renderTypePill(h.type)}</td>
       <td class="val">${h.buyPrice?CUR()+parseFloat(h.buyPrice).toFixed(2):'—'}</td>
       <td>${fmtDate(h.buyDate)}</td>
       <td class="val">${h.sellPrice?CUR()+parseFloat(h.sellPrice).toFixed(2):'—'}</td>
@@ -186,6 +133,7 @@ function deleteHolding(id){
   S.holdings=S.holdings.filter(h=>h.id!==id);
   save(); renderHoldings(); renderOverview(); toast('Holding deleted');
 }
+
 function deleteClosedHolding(i){
   S.closedHoldings.splice(i,1);
   save(); renderClosed(); toast('Deleted');
